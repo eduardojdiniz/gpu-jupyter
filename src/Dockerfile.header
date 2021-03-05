@@ -1,6 +1,27 @@
 # Use NVIDIA CUDA as base image and run the same installation as in the other packages.
-# The version of cudatoolkit must match those of the base image, see Dockerfile.pytorch
-FROM nvidia/cuda:10.2-cudnn8-runtime-ubuntu18.04
-LABEL authors="Christoph Schranz <christoph.schranz@salzburgresearch.at>, Mathematical Michael <consistentbayes@gmail.com>"
+# The version of cudatoolkit must match those of the base image
+FROM nvcr.io/nvidia/tensorflow:21.02-tf2-py3
+LABEL authors="Eduardo Diniz <edd32@pitt.edu>"
+
+USER root
+
 # This is a concatenated Dockerfile, the maintainers of subsequent sections may vary.
 RUN chmod 1777 /tmp && chmod 1777 /var/tmp
+
+ARG NB_USER="jovyan"
+ARG NB_PW="jovyan"
+ARG NB_UID="1000"
+ARG NB_GID="100"
+
+# Option1: Using unencrypted password/ specifying password
+RUN useradd -m -s /bin/bash -N -u ${NB_UID} ${NB_USER} && echo "${NB_USER}:${NB_PW}" | \
+      chpasswd
+
+# Option2: Using the same encrypted password as host
+#COPY /etc/group /etc/group
+#COPY /etc/passwd /etc/passwd
+#COPY /etc/shadow /etc/shadow
+
+# Switch back to jovyan to avoid accidental container runs as root
+USER ${NB_UID}:${NB_GID}
+WORKDIR /home/${NB_USER}

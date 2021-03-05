@@ -6,11 +6,32 @@
 
 
 # Use NVIDIA CUDA as base image and run the same installation as in the other packages.
-# The version of cudatoolkit must match those of the base image, see Dockerfile.pytorch
-FROM nvidia/cuda:10.2-cudnn8-runtime-ubuntu18.04
-LABEL authors="Christoph Schranz <christoph.schranz@salzburgresearch.at>, Mathematical Michael <consistentbayes@gmail.com>"
+# The version of cudatoolkit must match those of the base image
+FROM nvcr.io/nvidia/tensorflow:21.02-tf2-py3
+LABEL authors="Eduardo Diniz <edd32@pitt.edu>"
+
+USER root
+
 # This is a concatenated Dockerfile, the maintainers of subsequent sections may vary.
 RUN chmod 1777 /tmp && chmod 1777 /var/tmp
+
+ARG NB_USER="jovyan"
+ARG NB_PW="jovyan"
+ARG NB_UID="1000"
+ARG NB_GID="100"
+
+# Option1: Using unencrypted password/ specifying password
+RUN useradd -m -s /bin/bash -N -u ${NB_UID} ${NB_USER} && echo "${NB_USER}:${NB_PW}" | \
+      chpasswd
+
+# Option2: Using the same encrypted password as host
+#COPY /etc/group /etc/group
+#COPY /etc/passwd /etc/passwd
+#COPY /etc/shadow /etc/shadow
+
+# Switch back to jovyan to avoid accidental container runs as root
+USER ${NB_UID}:${NB_GID}
+WORKDIR /home/${NB_USER}
 
 ############################################################################
 #################### Dependency: jupyter/base-image ########################
@@ -42,24 +63,25 @@ USER root
 # Conda version
 ARG conda_version="4.9.2"
 # Miniforge installer patch version
-ARG miniforge_patch_number="5"
+ARG miniforge_patch_number="7"
 # Miniforge installer architecture
 ARG miniforge_arch="x86_64"
-# Python implementation to use 
-# can be either Miniforge3 to use Python or Miniforge-pypy3 to use PyPy
-ARG miniforge_python="Miniforge3"
+# Package Manager and Python implementation to use (https://github.com/conda-forge/miniforge)
+# - conda only: either Miniforge3 to use Python or Miniforge-pypy3 to use PyPy
+# - conda + mamba: either Mambaforge to use Python or Mambaforge-pypy3 to use PyPy
+ARG miniforge_python="Mambaforge"
 
 # Miniforge archive to install
 ARG miniforge_version="${conda_version}-${miniforge_patch_number}"
 # Miniforge installer
 ARG miniforge_installer="${miniforge_python}-${miniforge_version}-Linux-${miniforge_arch}.sh"
 # Miniforge checksum
-ARG miniforge_checksum="49dddb3998550e40adc904dae55b0a2aeeb0bd9fc4306869cc4a600ec4b8b47c"
+ARG miniforge_checksum="5a827a62d98ba2217796a9dc7673380257ed7c161017565fba8ce785fb21a599"
 
 # Install all OS dependencies for notebook server that starts but lacks all
 # features (e.g., download as all possible file formats)
 ENV DEBIAN_FRONTEND noninteractive
-RUN apt-get update \
+RUN apt-get -q update \
  && apt-get install -yq --no-install-recommends \
     wget \
     ca-certificates \
@@ -101,7 +123,6 @@ RUN sed -i 's/^#force_color_prompt=yes/force_color_prompt=yes/' /etc/skel/.bashr
 RUN echo "auth requisite pam_deny.so" >> /etc/pam.d/su && \
     sed -i.bak -e 's/^%admin/#%admin/' /etc/sudoers && \
     sed -i.bak -e 's/^%sudo/#%sudo/' /etc/sudoers && \
-    useradd -m -s /bin/bash -N -u $NB_UID $NB_USER && \
     mkdir -p $CONDA_DIR && \
     chown $NB_USER:$NB_GID $CONDA_DIR && \
     chmod g+w /etc/passwd && \
@@ -118,7 +139,7 @@ RUN mkdir "/home/$NB_USER/work" && \
 # Install conda as jovyan and check the sha256 sum provided on the download site
 WORKDIR /tmp
 
-# Prerequisites installation: conda, pip, tini
+# Prerequisites installation: conda, mamba, pip, tini
 RUN wget --quiet "https://github.com/conda-forge/miniforge/releases/download/${miniforge_version}/${miniforge_installer}" && \
     echo "${miniforge_checksum} *${miniforge_installer}" | sha256sum --check && \
     /bin/bash "${miniforge_installer}" -f -b -p $CONDA_DIR && \
@@ -149,7 +170,7 @@ RUN wget --quiet "https://github.com/conda-forge/miniforge/releases/download/${m
 RUN conda install --quiet --yes \
     'notebook=6.2.0' \
     'jupyterhub=1.3.0' \
-    'jupyterlab=3.0.7' && \
+    'jupyterlab=3.0.9' && \
     conda clean --all -f -y && \
     npm cache clean --force && \
     jupyter notebook --generate-config && \
@@ -257,7 +278,7 @@ RUN conda install --quiet --yes \
     'numexpr=2.7.*' \
     'pandas=1.2.*' \
     'patsy=0.5.*' \
-    'protobuf=3.14.*' \
+    'protobuf=3.15.*' \
     'pytables=3.6.*' \
     'scikit-image=0.18.*' \
     'scikit-learn=0.24.*' \
@@ -292,7 +313,7 @@ USER $NB_UID
 WORKDIR $HOME
 
   ############################################################################
-  ################ Dependency: jupyter/datascience-notebook ##################
+  ################# Dependecy: jupyter/datascience-notebook ##################
   ############################################################################
   
 # Copyright (c) Jupyter Development Team.
@@ -365,7 +386,7 @@ RUN conda install --quiet --yes \
     'r-nycflights13=1.0*' \
     'r-randomforest=4.6*' \
     'r-rcurl=1.98*' \
-    'r-rmarkdown=2.6*' \
+    'r-rmarkdown=2.7*' \
     'r-rsqlite=2.2*' \
     'r-shiny=1.6*' \
     'r-tidyverse=1.3*' \
@@ -392,69 +413,270 @@ RUN julia -e 'import Pkg; Pkg.update()' && \
 
 WORKDIR $HOME
 
-############################################################################
-########################## Dependency: gpulibs #############################
-############################################################################
+  ############################################################################
+  ##################### Dependency: GPULIBS ##################################
+  ############################################################################
+  
+LABEL maintainer="Eduardo Diniz <edd32@pitt.edu>"
 
-LABEL maintainer="Christoph Schranz <christoph.schranz@salzburgresearch.at>"
-
-# Install Tensorflow, check compatibility here: https://www.tensorflow.org/install/gpu
-# installation via conda leads to errors in version 4.8.2
-RUN pip install --upgrade pip && \
-    pip install --no-cache-dir "tensorflow==2.3.2" && \
-    pip install --no-cache-dir keras
+USER $NB_USER
 
 # Install PyTorch with dependencies
 RUN conda install --quiet --yes \
     pyyaml mkl mkl-include setuptools cmake cffi typing
 
 # Check compatibility here: https://pytorch.org/get-started/locally/
-RUN pip install torch torchvision torchaudio torchviz
+RUN pip install --upgrade pip && \
+    pip install --no-cache-dir \
+        torch \
+        torchvision \
+        torchaudio \
+        torchviz \
+        torchsummary \
+        torchelastic
+
+# Install Keras, check compatibility here: https://www.tensorflow.org/install/gpu
+#RUN pip install --no-cache-dir keras
+
+# Install NLP libraries:
+RUN pip install nltk gensim spacy && \
+    python -m spacy download en_core_web_sm
+
+# Install Reinforcement Learning library:
+RUN pip install gym
+
+# Install for Object Detection notebook:
+RUN pip install opencv-python
 
 # Clean installation
-RUN conda clean --all -f -y && \
-    fix-permissions $CONDA_DIR && \
-    fix-permissions /home/$NB_USER
+#RUN conda clean --all -f -y && \
+#    fix-permissions $CONDA_DIR && \
+#    fix-permissions /home/$NB_USER
 
   ############################################################################
   ############################ Useful packages ###############################
   ############################################################################
   
-LABEL authors="Christoph Schranz <christoph.schranz@salzburgresearch.at>, Mathematical Michael <consistentbayes@gmail.com>"
+LABEL authors="Eduardo Diniz <edd32@pitt.edu>"
 
 USER root
 
-RUN pip install --no-cache-dir ipyleaflet plotly ipywidgets
+RUN pip install --no-cache-dir \
+        ipyleaflet \
+        ipywidgets \
+        jupyterhub \
+        ipysheet \
+        voila \
+ && pip install --no-cache-dir \
+        plotly \
+        dash \
+ && pip install --no-cache-dir \
+        bokeh \
+        jupyter_bokeh \
+ &&	pip install --no-cache-dir \
+        jupyterlab_latex \
+        dockerspawner \
+        oauthenticator \
+        cufflinks \
+        algorithmx \
+ && pip install --no-cache-dir --upgrade jupyterthemes \
+ && pip install --no-cache-dir \
+    jupyter_contrib_nbextensions \
+    jupyter_nbextensions_configurator
+
+
+RUN jupyter contrib nbextension install --sys-prefix
+RUN jupyter nbextensions_configurator enable --sys-prefix
+
+# Enable the Jupyter Lab extensions
+RUN pip install --no-cache-dir --upgrade jupyterlab jupyterlab-git \
+ && pip install --no-cache-dir \
+    jupyterlab-drawio
 
 # Install important packages and Graphviz
 RUN set -ex \
  && buildDeps=' \
-    graphviz==0.11 \
+    graphviz \
 ' \
  && apt-get update \
- && apt-get -y install htop apt-utils graphviz libgraphviz-dev openssh-client \
- && pip install --no-cache-dir $buildDeps
+ && apt-get install -yq --no-install-recommends \
+        htop \
+        apt-utils \
+        graphviz \
+        libgraphviz-dev \
+        openssh-client \
+        tmux \
+ && pip install --no-cache-dir \
+        $buildDeps \
+        requests \
+        arrow \
+        dateutils \
+        webdavclient \
+        webdavclient3
 
-# Install various extensions
-RUN fix-permissions $CONDA_DIR
-# jupyterlab/github Does not support jlab 3.x yet.
-# RUN jupyter labextension install @jupyterlab/github
-RUN pip install --upgrade jupyterlab jupyterlab-git
-RUN pip install jupyterlab-drawio
-RUN jupyter nbextension enable --py --sys-prefix ipyleaflet
-RUN jupyter labextension install jupyterlab-plotly@4.14.3
-RUN jupyter labextension install @jupyter-widgets/jupyterlab-manager plotlywidget@4.14.3
-# RUN pip install "jupyterlab-kite>=2.0.2"
+# code formatter
+RUN pip install --no-cache-dir \
+        black \
+        yapf \
+        jupyterlab_code_formatter \
+ && pip install --no-cache-dir --upgrade autopep8
+
+# dbdime (Jupyter Notebook Diff and Merge tools)
+RUN pip install --no-cache-dir nbdime
+
+RUN	apt-get install -yq --no-install-recommends \
+		texlive-latex-recommended \
+		texlive-lang-english \
+		texlive-lang-european \
+		texlive-lang-german \
+		texlive-pstricks \
+		tmux \
+		vim \
+ && apt-get clean \
+ && rm -rf /var/lib/apt/lists/*
+
+
+##################################################
+####### Enable Jupyter Notebook Extensions #######
+##################################################
+#RUN jupyter nbextension enable --py --sys-prefix jupyter-black-master/jupyter-black
+#RUN jupyter nbextension enable --py --sys-prefix notify
+#RUN jupyter nbextension enable --py --sys-prefix skip-traceback
+#RUN jupyter nbextension enable --py --sys-prefix jupyter-autopep8-master/jupyter-autopep8
+#RUN jupyter nbextension enable --py --sys-prefix scratchpad
+#RUN jupyter nbextension enable --py --sys-prefix snippets
+#RUN jupyter nbextension enable --py --sys-prefix init_cell
+#RUN jupyter nbextension enable --py --sys-prefix hinterland
+#RUN jupyter nbextension enable --py --sys-prefix ipyleaflet
+#RUN jupyter nbextension enable --py --sys-prefix contrib_nbextensions_help_item
+#RUN jupyter nbextension enable --py --sys-prefix autosavetime
+#RUN jupyter nbextension enable --py --sys-prefix codefolding
+#RUN jupyter nbextension enable --py --sys-prefix code_font_size/code_font_size
+#RUN jupyter nbextension enable --py --sys-prefix code_prettify/code_prettify
+#RUN jupyter nbextension enable --py --sys-prefix collapsible_headings
+#RUN jupyter nbextension enable --py --sys-prefix comment-uncomment
+#RUN jupyter nbextension enable --py --sys-prefix equation-numbering
+#RUN jupyter nbextension enable --py --sys-prefix execute_time/ExecuteTime
+#RUN jupyter nbextension enable --py --sys-prefix gist_it
+#RUN jupyter nbextension enable --py --sys-prefix hide_input
+#RUN jupyter nbextension enable --py --sys-prefix spellchecker
+#RUN jupyter nbextension enable --py --sys-prefix toc2
+#RUN jupyter nbextension enable --py --sys-prefix toggle_all_line_numbers
 # RUN pip install --no-cache-dir jupyter-tabnine==1.1.0  --user && \
 #  jupyter nbextension install --py jupyter_tabnine --user && \
 #  jupyter nbextension enable --py jupyter_tabnine --user && \
 #  jupyter serverextension enable --py jupyter_tabnine --user
-RUN pip install --no-cache-dir jupyter_contrib_nbextensions \
-  jupyter_nbextensions_configurator rise
-#  jupyter nbextension enable codefolding/main
-RUN jupyter labextension install @ijmbarr/jupyterlab_spellchecker
 
-RUN fix-permissions /home/$NB_USER
+##################################################
+######### Enable Jupyter Lab Extensions ##########
+##################################################
+# font
+#RUN jupyter labextension install @deathbeds/jupyterlab-fonts --no-build
+#RUN jupyter labextension install @deathbeds/jupyterlab-font-anonymous-pro --no-build
+#RUN jupyter labextension install @deathbeds/jupyterlab-font-dejavu-sans-mono --no-build
+#RUN jupyter labextension install @deathbeds/jupyterlab-font-fira-code --no-build
+
+
+# github
+## jupyterlab/github Does not support jlab 3.x yet.
+#RUN jupyter labextension install @jupyterlab/github --no-build
+
+# google drive
+## jupyterlab/google-drive Does not support jlab 3.x yet.
+#RUN jupyter labextension install @jupyterlab/google-drive --no-build
+
+# shortcut ui
+## jupyterlab/shortcutui Does not support jlab 3.x yet.
+#RUN jupyter labextension install @jupyterlab/shortcutui --no-build
+
+# python byte code
+## jupyterlab-python-bytecode Does not support jlab 3.x yet.
+#RUN jupyter labextension install jupyterlab-python-bytecode --no-build
+
+# file tree
+## jupyterlab_filetree Does not support jlab 3.x yet.
+#RUN jupyter labextension install jupyterlab_filetree --no-build
+
+
+# horizon theme
+## @mohirio/jupyterlab-horizon-theme Does not support jlab 3.x yet.
+#RUN jupyter labextension install @mohirio/jupyterlab-horizon-theme --no-build
+
+# material darker theme
+## @oriolmirosa/jupyterlab_materialdarker Does not support jlab 3.x yet.
+#RUN jupyter labextension install @oriolmirosa/jupyterlab_materialdarker --no-build
+
+# darcula theme
+## @ryantam626/jupyterlab_code_formatter Does not support jlab 3.x yet.
+#RUN jupyter labextension install @telamonian/theme-darcula --no-build
+
+
+# output auto scroll
+## @wallneradam/output_auto_scroll Does not support jlab 3.x yet.
+#RUN jupyter labextension install @wallneradam/output_auto_scroll --no-build
+
+
+
+# latex
+## @jupyterlab/latex Does not support jlab 3.x yet.
+#RUN jupyter labextension install @jupyterlab/latex --no-build
+
+
+# bokeh
+## @bokeh/jupyter_bokeh Does not support jlab 3.x yet.
+#RUN jupyter labextension install @bokeh/jupyter_bokeh --no-build
+
+# pyviz
+## @pyviz/jupyterlab_pyviz Does not support jlab 3.x yet.
+#RUN jupyter labextension install @pyviz/jupyterlab_pyviz --no-build
+
+
+# tensorboard
+## jupyterlab_tensorboard Does not support jlab 3.x yet.
+#RUN jupyter labextension install jupyterlab_tensorboard --no-build
+
+# html
+## @mflevine/jupyterlab_html Does not support jlab 2.x yet.
+#RUN jupyter labextension install @mflevine/jupyterlab_html --no-build
+
+# sql outdated
+# RUN pip install --no-cache-dir jupyterlab-sql
+
+RUN jupyter serverextension enable --py --sys-prefix jupyterlab && \
+    jupyter labextension install @jupyterlab/celltags --no-build && \
+    jupyter labextension install @axlair/jupyterlab_vim --no-build && \
+    jupyter labextension install @krassowski/jupyterlab_go_to_definition --no-build && \
+    jupyter labextension install @ryantam626/jupyterlab_code_formatter --no-build  && \
+    jupyter serverextension enable --py --sys-prefix jupyterlab_code_formatter && \
+    jupyter labextension install @ijmbarr/jupyterlab_spellchecker --no-build && \
+    jupyter labextension install jupyterlab-plotly --no-build && \
+    jupyter labextension install @jupyter-widgets/jupyterlab-manager plotlywidget --no-build && \
+    jupyter labextension install ipysheet --no-build && \
+    jupyter labextension install @jupyterlab/git --no-build && \
+    jupyter serverextension enable --py --sys-prefix jupyterlab_git && \
+    jupyter labextension install @jupyterlab/hub-extension --no-build && \
+    jupyter labextension install algorithmx-jupyter --no-build && \
+    jupyter labextension install @jupyterlab/toc --no-build && \
+    pip install --no-cache-dir elyra && \
+    pip install "jupyter-kite>=2.0.2" && \
+    jupyter lab build && \
+        jupyter lab clean && \
+        jlpm cache clean && \
+        npm cache clean --force && \
+        rm -rf $HOME/.node-gyp && \
+        rm -rf $HOME/.local && \
+    fix-permissions $CONDA_DIR && \
+    fix-permissions /home/$NB_USER
+
+# Install conda develop
+RUN conda install --quiet --yes conda-build && \
+    conda clean --all -f -y && \
+    fix-permissions "${CONDA_DIR}" && \
+    fix-permissions "/home/${NB_USER}"
+
+# Add nvidia-tensorflow packages to conda env path
+# For now added link to all modules. I have to figure out what takes precedence, the native packages or the pth ones.
+RUN conda develop /usr/local/lib/python3.8/dist-packages/
 
 # Switch back to jovyan to avoid accidental container runs as root
 USER $NB_UID

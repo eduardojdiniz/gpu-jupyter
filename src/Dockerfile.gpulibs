@@ -1,19 +1,35 @@
-LABEL maintainer="Christoph Schranz <christoph.schranz@salzburgresearch.at>"
+LABEL maintainer="Eduardo Diniz <edd32@pitt.edu>"
 
-# Install Tensorflow, check compatibility here: https://www.tensorflow.org/install/gpu
-# installation via conda leads to errors in version 4.8.2
-RUN pip install --upgrade pip && \
-    pip install --no-cache-dir "tensorflow==2.3.2" && \
-    pip install --no-cache-dir keras
+USER $NB_USER
 
 # Install PyTorch with dependencies
 RUN conda install --quiet --yes \
     pyyaml mkl mkl-include setuptools cmake cffi typing
 
 # Check compatibility here: https://pytorch.org/get-started/locally/
-RUN pip install torch torchvision torchaudio torchviz
+RUN pip install --upgrade pip && \
+    pip install --no-cache-dir \
+        torch \
+        torchvision \
+        torchaudio \
+        torchviz \
+        torchsummary \
+        torchelastic
+
+# Install Keras, check compatibility here: https://www.tensorflow.org/install/gpu
+#RUN pip install --no-cache-dir keras
+
+# Install NLP libraries:
+RUN pip install nltk gensim spacy && \
+    python -m spacy download en_core_web_sm
+
+# Install Reinforcement Learning library:
+RUN pip install gym
+
+# Install for Object Detection notebook:
+RUN pip install opencv-python
 
 # Clean installation
-RUN conda clean --all -f -y && \
-    fix-permissions $CONDA_DIR && \
-    fix-permissions /home/$NB_USER
+#RUN conda clean --all -f -y && \
+#    fix-permissions $CONDA_DIR && \
+#    fix-permissions /home/$NB_USER

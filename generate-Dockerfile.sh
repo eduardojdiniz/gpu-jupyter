@@ -5,12 +5,13 @@ cd $(cd -P -- "$(dirname -- "$0")" && pwd -P)
 export DOCKERFILE=".build/Dockerfile"
 export STACKS_DIR=".build/docker-stacks"
 # please test the build of the commit in https://github.com/jupyter/docker-stacks/commits/master in advance
-export HEAD_COMMIT="70a7cb8e13fb3e89264d21bd7bc86b1599d1b1f3"
+export HEAD_COMMIT="29edefbcb06aff6183d880d82c32b5c7d24e6e66" # Merge pull request 1246 from romainx/update_2021-02-28
 
 while [[ "$#" -gt 0 ]]; do case $1 in
   -c|--commit) HEAD_COMMIT="$2"; shift;;
+  --gpulibs)    gpulibs=1;;
   --no-datascience-notebook) no_datascience_notebook=1;;
-  --python-only) no_datascience_notebook=1;;
+  --python-only) no_datascience_notebook=1 && gpulibs=0;;
   --no-useful-packages) no_useful_packages=1;;
   -s|--slim) no_datascience_notebook=1 && no_useful_packages=1;;
   *) echo "Unknown parameter passed: $1" &&
@@ -55,7 +56,7 @@ echo "
 #################### Dependency: jupyter/base-image ########################
 ############################################################################
 " >> $DOCKERFILE
-cat $STACKS_DIR/base-notebook/Dockerfile | grep -v BASE_CONTAINER >> $DOCKERFILE
+cat $STACKS_DIR/base-notebook/Dockerfile | grep -v BASE_CONTAINER | grep -v useradd >> $DOCKERFILE
 
 # copy files that are used during the build:
 cp $STACKS_DIR/base-notebook/jupyter_notebook_config.py .build/
@@ -83,7 +84,7 @@ cat $STACKS_DIR/scipy-notebook/Dockerfile | grep -v BASE_CONTAINER >> $DOCKERFIL
 if [[ "$no_datascience_notebook" != 1 ]]; then
   echo "
   ############################################################################
-  ################ Dependency: jupyter/datascience-notebook ##################
+  ################# Dependecy: jupyter/datascience-notebook ##################
   ############################################################################
   " >> $DOCKERFILE
   cat $STACKS_DIR/datascience-notebook/Dockerfile | grep -v BASE_CONTAINER >> $DOCKERFILE
@@ -91,14 +92,18 @@ else
   echo "Set 'no-datascience-notebook' = 'python-only', not installing the datascience-notebook with Julia and R."
 fi
 
-# Note that the following step also installs the cudatoolkit, which is
-# essential to access the GPU.
-echo "
-############################################################################
-########################## Dependency: gpulibs #############################
-############################################################################
-" >> $DOCKERFILE
-cat src/Dockerfile.gpulibs >> $DOCKERFILE
+# install gpulibs
+if [[ "$gpulibs" -eq 1 ]]; then
+  echo "
+  ############################################################################
+  ##################### Dependency: GPULIBS ##################################
+  ############################################################################
+  " >> $DOCKERFILE
+  cat src/Dockerfile.gpulibs >> $DOCKERFILE
+
+else
+  echo "Set 'no-gpu accelerated deep learning extra libraries'"
+fi
 
 # install useful packages if not excluded or spare mode is used
 if [[ "$no_useful_packages" != 1 ]]; then

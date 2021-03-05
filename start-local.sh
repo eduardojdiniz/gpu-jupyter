@@ -23,7 +23,7 @@ export UID=$(id -u)
 export GID=$(id -g)
 
 # echo $JUPYTER_PORT
-bash generate-Dockerfile.sh
+bash generate-Dockerfile.sh --tensorflow
 docker-compose up --build -d
 
 if [ $? -eq 0 ]; then

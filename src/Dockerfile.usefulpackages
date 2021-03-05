@@ -1,38 +1,223 @@
-LABEL authors="Christoph Schranz <christoph.schranz@salzburgresearch.at>, Mathematical Michael <consistentbayes@gmail.com>"
+LABEL authors="Eduardo Diniz <edd32@pitt.edu>"
 
 USER root
 
-RUN pip install --no-cache-dir ipyleaflet plotly ipywidgets
+RUN pip install --no-cache-dir \
+        ipyleaflet \
+        ipywidgets \
+        jupyterhub \
+        ipysheet \
+        voila \
+ && pip install --no-cache-dir \
+        plotly \
+        dash \
+ && pip install --no-cache-dir \
+        bokeh \
+        jupyter_bokeh \
+ &&	pip install --no-cache-dir \
+        jupyterlab_latex \
+        dockerspawner \
+        oauthenticator \
+        cufflinks \
+        algorithmx \
+ && pip install --no-cache-dir --upgrade jupyterthemes \
+ && pip install --no-cache-dir \
+    jupyter_contrib_nbextensions \
+    jupyter_nbextensions_configurator
+
+
+RUN jupyter contrib nbextension install --sys-prefix
+RUN jupyter nbextensions_configurator enable --sys-prefix
+
+# Enable the Jupyter Lab extensions
+RUN pip install --no-cache-dir --upgrade jupyterlab jupyterlab-git \
+ && pip install --no-cache-dir \
+    jupyterlab-drawio
 
 # Install important packages and Graphviz
 RUN set -ex \
  && buildDeps=' \
-    graphviz==0.11 \
+    graphviz \
 ' \
  && apt-get update \
- && apt-get -y install htop apt-utils graphviz libgraphviz-dev openssh-client \
- && pip install --no-cache-dir $buildDeps
+ && apt-get install -yq --no-install-recommends \
+        htop \
+        apt-utils \
+        graphviz \
+        libgraphviz-dev \
+        openssh-client \
+        tmux \
+ && pip install --no-cache-dir \
+        $buildDeps \
+        requests \
+        arrow \
+        dateutils \
+        webdavclient \
+        webdavclient3
 
-# Install various extensions
-RUN fix-permissions $CONDA_DIR
-# jupyterlab/github Does not support jlab 3.x yet.
-# RUN jupyter labextension install @jupyterlab/github
-RUN pip install --upgrade jupyterlab jupyterlab-git
-RUN pip install jupyterlab-drawio
-RUN jupyter nbextension enable --py --sys-prefix ipyleaflet
-RUN jupyter labextension install jupyterlab-plotly@4.14.3
-RUN jupyter labextension install @jupyter-widgets/jupyterlab-manager plotlywidget@4.14.3
-# RUN pip install "jupyterlab-kite>=2.0.2"
+# code formatter
+RUN pip install --no-cache-dir \
+        black \
+        yapf \
+        jupyterlab_code_formatter \
+ && pip install --no-cache-dir --upgrade autopep8
+
+# dbdime (Jupyter Notebook Diff and Merge tools)
+RUN pip install --no-cache-dir nbdime
+
+RUN	apt-get install -yq --no-install-recommends \
+		texlive-latex-recommended \
+		texlive-lang-english \
+		texlive-lang-european \
+		texlive-lang-german \
+		texlive-pstricks \
+		tmux \
+		vim \
+ && apt-get clean \
+ && rm -rf /var/lib/apt/lists/*
+
+
+##################################################
+####### Enable Jupyter Notebook Extensions #######
+##################################################
+#RUN jupyter nbextension enable --py --sys-prefix jupyter-black-master/jupyter-black
+#RUN jupyter nbextension enable --py --sys-prefix notify
+#RUN jupyter nbextension enable --py --sys-prefix skip-traceback
+#RUN jupyter nbextension enable --py --sys-prefix jupyter-autopep8-master/jupyter-autopep8
+#RUN jupyter nbextension enable --py --sys-prefix scratchpad
+#RUN jupyter nbextension enable --py --sys-prefix snippets
+#RUN jupyter nbextension enable --py --sys-prefix init_cell
+#RUN jupyter nbextension enable --py --sys-prefix hinterland
+#RUN jupyter nbextension enable --py --sys-prefix ipyleaflet
+#RUN jupyter nbextension enable --py --sys-prefix contrib_nbextensions_help_item
+#RUN jupyter nbextension enable --py --sys-prefix autosavetime
+#RUN jupyter nbextension enable --py --sys-prefix codefolding
+#RUN jupyter nbextension enable --py --sys-prefix code_font_size/code_font_size
+#RUN jupyter nbextension enable --py --sys-prefix code_prettify/code_prettify
+#RUN jupyter nbextension enable --py --sys-prefix collapsible_headings
+#RUN jupyter nbextension enable --py --sys-prefix comment-uncomment
+#RUN jupyter nbextension enable --py --sys-prefix equation-numbering
+#RUN jupyter nbextension enable --py --sys-prefix execute_time/ExecuteTime
+#RUN jupyter nbextension enable --py --sys-prefix gist_it
+#RUN jupyter nbextension enable --py --sys-prefix hide_input
+#RUN jupyter nbextension enable --py --sys-prefix spellchecker
+#RUN jupyter nbextension enable --py --sys-prefix toc2
+#RUN jupyter nbextension enable --py --sys-prefix toggle_all_line_numbers
 # RUN pip install --no-cache-dir jupyter-tabnine==1.1.0  --user && \
 #  jupyter nbextension install --py jupyter_tabnine --user && \
 #  jupyter nbextension enable --py jupyter_tabnine --user && \
 #  jupyter serverextension enable --py jupyter_tabnine --user
-RUN pip install --no-cache-dir jupyter_contrib_nbextensions \
-  jupyter_nbextensions_configurator rise
-#  jupyter nbextension enable codefolding/main
-RUN jupyter labextension install @ijmbarr/jupyterlab_spellchecker
 
-RUN fix-permissions /home/$NB_USER
+##################################################
+######### Enable Jupyter Lab Extensions ##########
+##################################################
+# font
+#RUN jupyter labextension install @deathbeds/jupyterlab-fonts --no-build
+#RUN jupyter labextension install @deathbeds/jupyterlab-font-anonymous-pro --no-build
+#RUN jupyter labextension install @deathbeds/jupyterlab-font-dejavu-sans-mono --no-build
+#RUN jupyter labextension install @deathbeds/jupyterlab-font-fira-code --no-build
+
+
+# github
+## jupyterlab/github Does not support jlab 3.x yet.
+#RUN jupyter labextension install @jupyterlab/github --no-build
+
+# google drive
+## jupyterlab/google-drive Does not support jlab 3.x yet.
+#RUN jupyter labextension install @jupyterlab/google-drive --no-build
+
+# shortcut ui
+## jupyterlab/shortcutui Does not support jlab 3.x yet.
+#RUN jupyter labextension install @jupyterlab/shortcutui --no-build
+
+# python byte code
+## jupyterlab-python-bytecode Does not support jlab 3.x yet.
+#RUN jupyter labextension install jupyterlab-python-bytecode --no-build
+
+# file tree
+## jupyterlab_filetree Does not support jlab 3.x yet.
+#RUN jupyter labextension install jupyterlab_filetree --no-build
+
+
+# horizon theme
+## @mohirio/jupyterlab-horizon-theme Does not support jlab 3.x yet.
+#RUN jupyter labextension install @mohirio/jupyterlab-horizon-theme --no-build
+
+# material darker theme
+## @oriolmirosa/jupyterlab_materialdarker Does not support jlab 3.x yet.
+#RUN jupyter labextension install @oriolmirosa/jupyterlab_materialdarker --no-build
+
+# darcula theme
+## @ryantam626/jupyterlab_code_formatter Does not support jlab 3.x yet.
+#RUN jupyter labextension install @telamonian/theme-darcula --no-build
+
+
+# output auto scroll
+## @wallneradam/output_auto_scroll Does not support jlab 3.x yet.
+#RUN jupyter labextension install @wallneradam/output_auto_scroll --no-build
+
+
+
+# latex
+## @jupyterlab/latex Does not support jlab 3.x yet.
+#RUN jupyter labextension install @jupyterlab/latex --no-build
+
+
+# bokeh
+## @bokeh/jupyter_bokeh Does not support jlab 3.x yet.
+#RUN jupyter labextension install @bokeh/jupyter_bokeh --no-build
+
+# pyviz
+## @pyviz/jupyterlab_pyviz Does not support jlab 3.x yet.
+#RUN jupyter labextension install @pyviz/jupyterlab_pyviz --no-build
+
+
+# tensorboard
+## jupyterlab_tensorboard Does not support jlab 3.x yet.
+#RUN jupyter labextension install jupyterlab_tensorboard --no-build
+
+# html
+## @mflevine/jupyterlab_html Does not support jlab 2.x yet.
+#RUN jupyter labextension install @mflevine/jupyterlab_html --no-build
+
+# sql outdated
+# RUN pip install --no-cache-dir jupyterlab-sql
+
+RUN jupyter serverextension enable --py --sys-prefix jupyterlab && \
+    jupyter labextension install @jupyterlab/celltags --no-build && \
+    jupyter labextension install @axlair/jupyterlab_vim --no-build && \
+    jupyter labextension install @krassowski/jupyterlab_go_to_definition --no-build && \
+    jupyter labextension install @ryantam626/jupyterlab_code_formatter --no-build  && \
+    jupyter serverextension enable --py --sys-prefix jupyterlab_code_formatter && \
+    jupyter labextension install @ijmbarr/jupyterlab_spellchecker --no-build && \
+    jupyter labextension install jupyterlab-plotly --no-build && \
+    jupyter labextension install @jupyter-widgets/jupyterlab-manager plotlywidget --no-build && \
+    jupyter labextension install ipysheet --no-build && \
+    jupyter labextension install @jupyterlab/git --no-build && \
+    jupyter serverextension enable --py --sys-prefix jupyterlab_git && \
+    jupyter labextension install @jupyterlab/hub-extension --no-build && \
+    jupyter labextension install algorithmx-jupyter --no-build && \
+    jupyter labextension install @jupyterlab/toc --no-build && \
+    pip install --no-cache-dir elyra && \
+    pip install "jupyter-kite>=2.0.2" && \
+    jupyter lab build && \
+        jupyter lab clean && \
+        jlpm cache clean && \
+        npm cache clean --force && \
+        rm -rf $HOME/.node-gyp && \
+        rm -rf $HOME/.local && \
+    fix-permissions $CONDA_DIR && \
+    fix-permissions /home/$NB_USER
+
+# Install conda develop
+RUN conda install --quiet --yes conda-build && \
+    conda clean --all -f -y && \
+    fix-permissions "${CONDA_DIR}" && \
+    fix-permissions "/home/${NB_USER}"
+
+# Add nvidia-tensorflow packages to conda env path
+# For now added link to all modules. I have to figure out what takes precedence, the native packages or the pth ones.
+RUN conda develop /usr/local/lib/python3.8/dist-packages/
 
 # Switch back to jovyan to avoid accidental container runs as root
 USER $NB_UID
