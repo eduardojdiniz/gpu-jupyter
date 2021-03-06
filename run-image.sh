@@ -25,5 +25,12 @@ export NB_PW="jovyan"
 
 # docker tag $IMG_ID dinize/dev-jpyr:${TAGNAME}
 docker container rm dev-jpr_1
-docker run --gpus all -d -it -p 8848:8888 -v $(pwd)/data:/home/jovyan/work -e GRANT_SUDO=yes -e JUPYTER_ENABLE_LAB=yes --user $NB_USER --restart always --name dev-jpyr_1 dinize/dev-jpyr:${TAGNAME}
+docker run --gpus all -d -it -p 8848:8888 \
+    -v $(pwd)/data:/home/jovyan/work/data \
+    -v $(pwd)/notebooks:/home/jovyan/work/notebooks \
+    -e GRANT_SUDO=yes \
+    -e JUPYTER_ENABLE_LAB=yes \
+    --user $NB_USER \
+    --restart always \
+    --name dev-jpyr_1 dinize/dev-jpyr:${TAGNAME}
 #docker run --gpus all -d -it -p 8808:8888 -v $(pwd)/data:/home/jovyan/work -e GRANT_SUDO=yes -e JUPYTER_ENABLE_LAB=yes --user root --restart always --name dev-jpyr_1 dinize/dev-jpyr:${TAGNAME}
